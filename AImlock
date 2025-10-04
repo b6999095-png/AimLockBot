@@ -1,8 +1,8 @@
--- Aimlock Script for Roblox (HumanoidRootPart Targeting)
+-- Instant Aimlock Script for Roblox (HumanoidRootPart Targeting)
 -- Features:
--- - Locks onto nearest player's torso (HumanoidRootPart)
+-- - INSTANT lock onto nearest player's torso (HumanoidRootPart)
+-- - Zero smoothness for immediate snapping
 -- - Only locks onto players from other teams
--- - Smooth aiming with adjustable smoothness
 -- - Toggle with E key
 -- - FOV-based target selection
 
@@ -18,8 +18,7 @@ local Mouse = LocalPlayer:GetMouse()
 local ENABLED = false
 local KEY_TO_TOGGLE = Enum.KeyCode.E
 local MAX_DISTANCE = 1000
-local FOV = 200 -- Field of View for target selection
-local SMOOTHNESS = 0.1 -- Lower = smoother, Higher = snappier (0.1-1.0)
+local FOV = 250 -- Field of View for target selection
 local lockedPlayer = nil
 
 -- Function to check if a player is on a different team
@@ -67,13 +66,9 @@ local function getNearestPlayerToCrosshair()
     return nearestPlayer
 end
 
--- Smooth camera movement function
-local function smoothLookAt(targetPosition)
-    local currentCFrame = Camera.CFrame
-    local targetCFrame = CFrame.new(currentCFrame.Position, targetPosition)
-    
-    -- Lerp between current and target rotation
-    Camera.CFrame = currentCFrame:Lerp(targetCFrame, SMOOTHNESS)
+-- INSTANT camera snap function (no smoothing)
+local function instantLookAt(targetPosition)
+    Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPosition)
 end
 
 -- Toggle function
@@ -85,19 +80,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             -- Find a target when enabling
             lockedPlayer = getNearestPlayerToCrosshair()
             if lockedPlayer then
-                print("Aimlock ON - Locked onto: " .. lockedPlayer.Name)
+                print("INSTANT Aimlock ON - Locked onto: " .. lockedPlayer.Name)
             else
-                print("Aimlock ON - No target found")
+                print("INSTANT Aimlock ON - No target found")
             end
         else
             -- Clear target when disabling
             lockedPlayer = nil
-            print("Aimlock OFF")
+            print("INSTANT Aimlock OFF")
         end
     end
 end)
 
--- Main aimlock loop
+-- Main aimlock loop (runs every frame for instant response)
 RunService.RenderStepped:Connect(function()
     if ENABLED then
         -- If we have a locked player, check if they're still valid
@@ -108,15 +103,21 @@ RunService.RenderStepped:Connect(function()
                lockedPlayer.Character.Humanoid.Health > 0 and
                isPlayerOnDifferentTeam(lockedPlayer) then
                 
-                -- Smooth aim to HumanoidRootPart
-                smoothLookAt(lockedPlayer.Character.HumanoidRootPart.Position)
+                -- INSTANT snap to HumanoidRootPart (zero delay)
+                instantLookAt(lockedPlayer.Character.HumanoidRootPart.Position)
             else
-                -- If target is no longer valid, find a new one
+                -- If target is no longer valid, instantly find and lock new one
                 lockedPlayer = getNearestPlayerToCrosshair()
+                if lockedPlayer then
+                    instantLookAt(lockedPlayer.Character.HumanoidRootPart.Position)
+                end
             end
         else
-            -- If no target, try to find one
+            -- If no target, instantly find and lock one
             lockedPlayer = getNearestPlayerToCrosshair()
+            if lockedPlayer then
+                instantLookAt(lockedPlayer.Character.HumanoidRootPart.Position)
+            end
         end
     end
 end)
@@ -124,13 +125,13 @@ end)
 -- Create notification GUI
 local function createNotification()
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "AimlockNotification"
+    screenGui.Name = "InstantAimlockNotification"
     screenGui.Parent = game.CoreGui
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 250, 0, 80)
-    frame.Position = UDim2.new(0.5, -125, 0, 30)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    frame.Size = UDim2.new(0, 280, 0, 90)
+    frame.Position = UDim2.new(0.5, -140, 0, 30)
+    frame.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- Red for instant mode
     frame.BorderSizePixel = 0
     frame.Parent = screenGui
     
@@ -146,19 +147,19 @@ local function createNotification()
     textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     textLabel.TextScaled = true
     textLabel.Font = Enum.Font.GothamBold
-    textLabel.Text = "🎯 Aimlock Loaded!\nPress E to Toggle"
+    textLabel.Text = "⚡ INSTANT AIMLOCK!\nPress E to Toggle\nZERO Smoothness Mode"
     textLabel.Parent = frame
     
     -- Fade out animation
     local tween = game:GetService("TweenService"):Create(
         frame,
-        TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
         {BackgroundTransparency = 1}
     )
     
     local textTween = game:GetService("TweenService"):Create(
         textLabel,
-        TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
         {TextTransparency = 1}
     )
     
@@ -172,8 +173,8 @@ end
 
 -- Initialize
 createNotification()
-print("Aimlock script loaded successfully!")
-print("Press E to toggle aimlock on/off")
+print("INSTANT Aimlock script loaded successfully!")
+print("Press E to toggle INSTANT aimlock on/off")
+print("Mode: ZERO SMOOTHNESS - INSTANT SNAP")
 print("Targeting: HumanoidRootPart (Torso)")
-print("Smoothness: " .. SMOOTHNESS)
 print("FOV: " .. FOV)
