@@ -1,10 +1,10 @@
--- Aimlock Script for Roblox
+-- Aimlock Script for Roblox (HumanoidRootPart Targeting)
 -- Features:
--- - Locks onto nearest player to crosshair
+-- - Locks onto nearest player's torso (HumanoidRootPart)
 -- - Only locks onto players from other teams
--- - Locks to head with zero smoothness (instant)
+-- - Smooth aiming with adjustable smoothness
 -- - Toggle with E key
--- - Only locks onto one player at a time
+-- - FOV-based target selection
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -16,13 +16,17 @@ local Mouse = LocalPlayer:GetMouse()
 
 -- Settings
 local ENABLED = false
-local KEY_TO_TOGGLE = Enum.KeyCode.E -- Changed to E key
+local KEY_TO_TOGGLE = Enum.KeyCode.E
 local MAX_DISTANCE = 1000
-local FOV = 300 -- Field of View for target selection
-local lockedPlayer = nil -- Variable to store the locked player
+local FOV = 200 -- Field of View for target selection
+local SMOOTHNESS = 0.1 -- Lower = smoother, Higher = snappier (0.1-1.0)
+local lockedPlayer = nil
 
 -- Function to check if a player is on a different team
 local function isPlayerOnDifferentTeam(player)
+    if not LocalPlayer.Team or not player.Team then
+        return true -- If no teams, target everyone
+    end
     return player.Team ~= LocalPlayer.Team
 end
 
@@ -31,10 +35,10 @@ local function isPlayerVisible(player)
     local character = player.Character
     if not character then return false end
     
-    local head = character:FindFirstChild("Head")
-    if not head then return false end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return false end
     
-    local ray = Ray.new(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position).Unit * MAX_DISTANCE)
+    local ray = Ray.new(Camera.CFrame.Position, (rootPart.Position - Camera.CFrame.Position).Unit * MAX_DISTANCE)
     local hitPart, hitPosition = workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character})
     
     return hitPart and hitPart:IsDescendantOf(character)
@@ -46,13 +50,13 @@ local function getNearestPlayerToCrosshair()
     local shortestDistance = FOV
     
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
             -- Check if player is on different team
             if isPlayerOnDifferentTeam(player) then
-                local screenPoint = Camera:WorldToScreenPoint(player.Character.Head.Position)
+                local screenPoint = Camera:WorldToScreenPoint(player.Character.HumanoidRootPart.Position)
                 local screenDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
                 
-                if screenDistance < shortestDistance then
+                if screenDistance < shortestDistance and isPlayerVisible(player) then
                     shortestDistance = screenDistance
                     nearestPlayer = player
                 end
@@ -63,6 +67,15 @@ local function getNearestPlayerToCrosshair()
     return nearestPlayer
 end
 
+-- Smooth camera movement function
+local function smoothLookAt(targetPosition)
+    local currentCFrame = Camera.CFrame
+    local targetCFrame = CFrame.new(currentCFrame.Position, targetPosition)
+    
+    -- Lerp between current and target rotation
+    Camera.CFrame = currentCFrame:Lerp(targetCFrame, SMOOTHNESS)
+end
+
 -- Toggle function
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == KEY_TO_TOGGLE then
@@ -71,48 +84,96 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if ENABLED then
             -- Find a target when enabling
             lockedPlayer = getNearestPlayerToCrosshair()
+            if lockedPlayer then
+                print("Aimlock ON - Locked onto: " .. lockedPlayer.Name)
+            else
+                print("Aimlock ON - No target found")
+            end
         else
             -- Clear target when disabling
             lockedPlayer = nil
+            print("Aimlock OFF")
         end
     end
 end)
 
 -- Main aimlock loop
 RunService.RenderStepped:Connect(function()
-    if ENABLED and lockedPlayer then
-        -- Check if locked player is still valid
-        if lockedPlayer.Character and 
-           lockedPlayer.Character:FindFirstChild("Head") and 
-           lockedPlayer.Character:FindFirstChild("Humanoid") and 
-           lockedPlayer.Character.Humanoid.Health > 0 and
-           isPlayerOnDifferentTeam(lockedPlayer) then
-            
-            -- Instant lock to head (0 smoothness)
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, lockedPlayer.Character.Head.Position)
+    if ENABLED then
+        -- If we have a locked player, check if they're still valid
+        if lockedPlayer then
+            if lockedPlayer.Character and 
+               lockedPlayer.Character:FindFirstChild("HumanoidRootPart") and 
+               lockedPlayer.Character:FindFirstChild("Humanoid") and 
+               lockedPlayer.Character.Humanoid.Health > 0 and
+               isPlayerOnDifferentTeam(lockedPlayer) then
+                
+                -- Smooth aim to HumanoidRootPart
+                smoothLookAt(lockedPlayer.Character.HumanoidRootPart.Position)
+            else
+                -- If target is no longer valid, find a new one
+                lockedPlayer = getNearestPlayerToCrosshair()
+            end
         else
-            -- If target is no longer valid, find a new one
+            -- If no target, try to find one
             lockedPlayer = getNearestPlayerToCrosshair()
         end
     end
 end)
 
--- Notification
+-- Create notification GUI
 local function createNotification()
     local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "AimlockNotification"
     screenGui.Parent = game.CoreGui
     
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(0, 200, 0, 50)
-    textLabel.Position = UDim2.new(0.5, -100, 0, 30)
-    textLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    textLabel.Text = "Aimlock Loaded\nToggle with E key"
-    textLabel.Parent = screenGui
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 250, 0, 80)
+    frame.Position = UDim2.new(0.5, -125, 0, 30)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
     
-    game:GetService("Debris"):AddItem(screenGui, 3)
+    -- Add corner rounding
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Position = UDim2.new(0, 0, 0, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Text = "🎯 Aimlock Loaded!\nPress E to Toggle"
+    textLabel.Parent = frame
+    
+    -- Fade out animation
+    local tween = game:GetService("TweenService"):Create(
+        frame,
+        TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {BackgroundTransparency = 1}
+    )
+    
+    local textTween = game:GetService("TweenService"):Create(
+        textLabel,
+        TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {TextTransparency = 1}
+    )
+    
+    tween:Play()
+    textTween:Play()
+    
+    tween.Completed:Connect(function()
+        screenGui:Destroy()
+    end)
 end
 
+-- Initialize
 createNotification()
-
-print("Aimlock script loaded. Press E to toggle.")
+print("Aimlock script loaded successfully!")
+print("Press E to toggle aimlock on/off")
+print("Targeting: HumanoidRootPart (Torso)")
+print("Smoothness: " .. SMOOTHNESS)
+print("FOV: " .. FOV)
