@@ -1,0 +1,118 @@
+-- Aimlock Script for Roblox
+-- Features:
+-- - Locks onto nearest player to crosshair
+-- - Only locks onto players from other teams
+-- - Locks to head with zero smoothness (instant)
+-- - Toggle with E key
+-- - Only locks onto one player at a time
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Camera = workspace.CurrentCamera
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+-- Settings
+local ENABLED = false
+local KEY_TO_TOGGLE = Enum.KeyCode.E -- Changed to E key
+local MAX_DISTANCE = 1000
+local FOV = 300 -- Field of View for target selection
+local lockedPlayer = nil -- Variable to store the locked player
+
+-- Function to check if a player is on a different team
+local function isPlayerOnDifferentTeam(player)
+    return player.Team ~= LocalPlayer.Team
+end
+
+-- Function to check if a player is visible
+local function isPlayerVisible(player)
+    local character = player.Character
+    if not character then return false end
+    
+    local head = character:FindFirstChild("Head")
+    if not head then return false end
+    
+    local ray = Ray.new(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position).Unit * MAX_DISTANCE)
+    local hitPart, hitPosition = workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character})
+    
+    return hitPart and hitPart:IsDescendantOf(character)
+end
+
+-- Function to get the nearest player to the crosshair
+local function getNearestPlayerToCrosshair()
+    local nearestPlayer = nil
+    local shortestDistance = FOV
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            -- Check if player is on different team
+            if isPlayerOnDifferentTeam(player) then
+                local screenPoint = Camera:WorldToScreenPoint(player.Character.Head.Position)
+                local screenDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                
+                if screenDistance < shortestDistance then
+                    shortestDistance = screenDistance
+                    nearestPlayer = player
+                end
+            end
+        end
+    end
+    
+    return nearestPlayer
+end
+
+-- Toggle function
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == KEY_TO_TOGGLE then
+        ENABLED = not ENABLED
+        
+        if ENABLED then
+            -- Find a target when enabling
+            lockedPlayer = getNearestPlayerToCrosshair()
+        else
+            -- Clear target when disabling
+            lockedPlayer = nil
+        end
+    end
+end)
+
+-- Main aimlock loop
+RunService.RenderStepped:Connect(function()
+    if ENABLED and lockedPlayer then
+        -- Check if locked player is still valid
+        if lockedPlayer.Character and 
+           lockedPlayer.Character:FindFirstChild("Head") and 
+           lockedPlayer.Character:FindFirstChild("Humanoid") and 
+           lockedPlayer.Character.Humanoid.Health > 0 and
+           isPlayerOnDifferentTeam(lockedPlayer) then
+            
+            -- Instant lock to head (0 smoothness)
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, lockedPlayer.Character.Head.Position)
+        else
+            -- If target is no longer valid, find a new one
+            lockedPlayer = getNearestPlayerToCrosshair()
+        end
+    end
+end)
+
+-- Notification
+local function createNotification()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Parent = game.CoreGui
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(0, 200, 0, 50)
+    textLabel.Position = UDim2.new(0.5, -100, 0, 30)
+    textLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.Text = "Aimlock Loaded\nToggle with E key"
+    textLabel.Parent = screenGui
+    
+    game:GetService("Debris"):AddItem(screenGui, 3)
+end
+
+createNotification()
+
+print("Aimlock script loaded. Press E to toggle.")
